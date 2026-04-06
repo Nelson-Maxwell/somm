@@ -430,7 +430,7 @@ async function runAnalysis(){
   go('s-loading');setLoad('Reading your wine list…','Sending to the sommelier',10);
   var t1=setTimeout(function(){setLoad('Researching tasting notes…','Cross-referencing wines',38);},2200);
   var t2=setTimeout(function(){setLoad('Matching to your palate…','Almost ready…',65);},5000);
-  var t3=setTimeout(function(){setLoad('Drawing your circles…','Finishing up',85);},7500);
+  var t3=setTimeout(function(){setLoad('Finalising your flavours…','Almost there',85);},7500);
   var sys='You are an expert sommelier AI. Analyse a wine list and match wines to a user palate profile. CRITICAL: respond with ONLY a valid JSON array — no markdown, no code fences, no text outside the array. Start your response with [ and end with ]. Each array item must have: "name" (string), "details" (string), "match" (exactly "great","good", or "skip"), "reason" (string, 1-2 sentences), "notes" (string, brief tasting profile), "position" (number 0-100, the vertical position of the WINE NAME LINE ONLY — not the tasting notes block — as a percentage from top of image, 0=very top 100=very bottom).';
   var profile=profileText();
   var messages;
@@ -511,22 +511,46 @@ function drawCircles(wines){
 
 
 async function deployToGitHub(){
-  if(!S.ghToken||!S.ghRepo){alert('No GitHub token set.\n\nGo to ⚙ Settings and add your token and repo.');return;}
-  var btn=document.getElementById('deploy-btn');var orig=btn?btn.textContent:'';if(btn)btn.textContent='…';
+  var btn=document.getElementById('deploy-btn');
+  if(!S.ghToken||!S.ghRepo){
+    alert('No GitHub token set.\n\nGo to ⚙ Settings, add your GitHub token and repo, then save.');
+    return;
+  }
+  if(btn)btn.textContent='…';
   var repo=S.ghRepo.trim().replace(/\/+$/,'');
   var apiUrl='https://api.github.com/repos/'+repo+'/contents/somm.html';
-  var headers={'Authorization':'token '+S.ghToken,'Accept':'application/vnd.github.v3+json','Content-Type':'application/json'};
+  var headers={
+    'Authorization':'token '+S.ghToken,
+    'Accept':'application/vnd.github.v3+json',
+    'Content-Type':'application/json'
+  };
   try{
-    var sha=null;var getR=await fetch(apiUrl,{headers:headers});if(getR.ok){var gd=await getR.json();sha=gd.sha;}
+    // Step 1: get current file SHA
+    var sha=null;
+    try{
+      var getR=await fetch(apiUrl,{headers:headers});
+      if(getR.status===401){throw new Error('GitHub token is invalid or expired. Go to ⚙ Settings and add a fresh token.');}
+      if(getR.status===404){throw new Error('Repo not found: '+repo+'. Check the repo name in ⚙ Settings.');}
+      if(getR.ok){var gd=await getR.json();sha=gd.sha;}
+    }catch(fetchErr){throw fetchErr;}
+    // Step 2: encode and push
     var html='<!DOCTYPE html>'+document.documentElement.outerHTML;
     var encoded=btoa(unescape(encodeURIComponent(html)));
-    var body={message:'Somm update',content:encoded};if(sha)body.sha=sha;
+    var body={message:'Somm update',content:encoded};
+    if(sha)body.sha=sha;
     var putR=await fetch(apiUrl,{method:'PUT',headers:headers,body:JSON.stringify(body)});
-    if(!putR.ok){var pd=await putR.json().catch(function(){return{};});throw new Error(pd.message||'GitHub error '+putR.status);}
-    var parts=repo.split('/');var liveUrl='https://'+parts[0]+'.github.io/'+(parts[1]||'somm')+'/somm.html';
-    alert('Deployed! ✓\n\nLive at:\n'+liveUrl+'\n\n(GitHub Pages takes ~60 seconds to update)');
-  }catch(err){alert('Deploy failed: '+err.message);}
-  finally{if(btn)btn.textContent=orig;}
+    if(!putR.ok){
+      var pd={};try{pd=await putR.json();}catch(e){}
+      throw new Error(pd.message||'GitHub API error '+putR.status);
+    }
+    var parts=repo.split('/');
+    var liveUrl='https://'+parts[0]+'.github.io/'+(parts[1]||'somm')+'/somm.html';
+    if(btn)btn.textContent='↑ Deploy';
+    alert('Deployed! ✓\n\nLive at:\n'+liveUrl+'\n\nGitHub Pages updates in ~60 seconds.');
+  }catch(err){
+    if(btn)btn.textContent='↑ Deploy';
+    alert('Deploy failed:\n\n'+err.message);
+  }
 }
 
 function resetScan(){clearFile();document.getElementById('manual-text').value='';document.getElementById('scan-err').innerHTML='';document.getElementById('results-cards').innerHTML='';go('s-scan');}
