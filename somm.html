@@ -256,9 +256,9 @@ textarea::placeholder,input::placeholder{color:var(--muted)}
     <p class="sub" id="res-summary"></p>
     <div id="annotated-wrap" style="display:none">
       <div class="legend">
-        <div class="leg-item"><div class="leg-dot" style="background:var(--green)"></div>Great match</div>
-        <div class="leg-item"><div class="leg-dot" style="background:var(--amber)"></div>Worth trying</div>
-        <div class="leg-item"><div class="leg-dot" style="background:var(--border)"></div>Skip</div>
+        <div class="leg-item"><div class="leg-dot" style="background:rgba(45,106,79,0.25);border:1.5px solid rgba(45,106,79,0.7);color:#1a5c38;font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center;border-radius:50%;width:16px;height:16px">✓</div>Great match</div>
+        <div class="leg-item"><div class="leg-dot" style="background:rgba(199,123,46,0.2);border:1.5px solid rgba(199,123,46,0.7);color:#7a4a10;font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center;border-radius:50%;width:16px;height:16px">?</div>Worth trying</div>
+        <div class="leg-item"><div class="leg-dot" style="background:rgba(155,34,38,0.12);border:1.5px solid rgba(155,34,38,0.5);color:#8b1a1a;font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center;border-radius:50%;width:16px;height:16px">✕</div>Skip</div>
       </div>
       <div class="ann-wrap"><img id="ann-img" src="" alt="Wine list"><canvas id="ann-canvas"></canvas></div>
     </div>
@@ -483,26 +483,67 @@ function drawCircles(wines){
   var canvas=document.getElementById('ann-canvas');var img=document.getElementById('ann-img');
   var W=img.naturalWidth,H=img.naturalHeight;canvas.width=W;canvas.height=H;
   var ctx=canvas.getContext('2d');ctx.clearRect(0,0,W,H);
-  var COLORS={great:'#2d6a4f',good:'#c77b2e'};
+  var STYLES={
+    great:{fill:'rgba(45,106,79,0.22)',stroke:'rgba(45,106,79,0.7)',icon:'✓',iconColor:'rgba(45,106,79,1)'},
+    good: {fill:'rgba(199,123,46,0.18)',stroke:'rgba(199,123,46,0.6)',icon:'?',iconColor:'rgba(199,123,46,1)'},
+    skip: {fill:'rgba(155,34,38,0.13)', stroke:'rgba(155,34,38,0.45)', icon:'✕',iconColor:'rgba(155,34,38,0.9)'}
+  };
   wines.forEach(function(w,idx){
-    if(w.match==='skip')return;
-    var color=COLORS[w.match];if(!color)return;
-    var pct=typeof w.position==='number'?Math.max(2,Math.min(98,w.position)):(idx+0.5)/wines.length*100;
-    wobble(ctx,W*0.5,H*(pct/100),W*0.43,Math.max(H*0.032,20),color,idx);
+    var style=STYLES[w.match]||STYLES.skip;
+    var pct=typeof w.position==='number'?Math.max(1,Math.min(99,w.position)):(idx+0.5)/wines.length*100;
+    var cy=H*(pct/100);
+    // highlight bar — full width, tight height around the text line
+    var barH=Math.max(H*0.045,28);
+    var barY=cy-barH*0.55;
+    var barX=W*0.02;
+    var barW=W*0.82; // leave room for icon on right
+    // fill
+    ctx.save();
+    ctx.globalAlpha=1;
+    ctx.fillStyle=style.fill;
+    roundRect(ctx,barX,barY,barW,barH,barH*0.25);
+    ctx.fill();
+    // subtle left accent line
+    ctx.fillStyle=style.stroke;
+    roundRect(ctx,barX,barY,Math.max(4,W*0.006),barH,Math.max(2,W*0.003));
+    ctx.fill();
+    // icon circle on right
+    var iconR=barH*0.42;
+    var iconX=barX+barW+iconR+W*0.015;
+    var iconY=cy;
+    ctx.beginPath();
+    ctx.arc(iconX,iconY,iconR,0,Math.PI*2);
+    ctx.fillStyle=style.stroke;
+    ctx.globalAlpha=0.15;
+    ctx.fill();
+    ctx.globalAlpha=1;
+    ctx.strokeStyle=style.stroke;
+    ctx.lineWidth=Math.max(1.5,W*0.002);
+    ctx.stroke();
+    // icon text
+    var fontSize=Math.max(14,barH*0.52);
+    ctx.font='600 '+fontSize+'px system-ui,sans-serif';
+    ctx.fillStyle=style.iconColor;
+    ctx.textAlign='center';
+    ctx.textBaseline='middle';
+    ctx.globalAlpha=1;
+    ctx.fillText(style.icon,iconX,iconY+fontSize*0.04);
+    ctx.restore();
   });
 }
 
-function wobble(ctx,cx,cy,rx,ry,color,seed){
-  var N=100;ctx.save();ctx.strokeStyle=color;ctx.lineWidth=Math.max(3,rx*0.012);ctx.lineCap='round';ctx.lineJoin='round';ctx.globalAlpha=0.88;ctx.beginPath();
-  for(var i=0;i<=N;i++){
-    var t=i/N,a=t*Math.PI*2,s=seed*1.3;
-    var w=1+Math.sin(a*3+s)*0.045+Math.sin(a*5+s*1.4)*0.028+Math.sin(a*9+s*0.8)*0.014;
-    var ox=Math.sin(a*2.3+s)*3.5+Math.sin(a*6.1+s)*1.5;
-    var oy=Math.cos(a*1.9+s)*3.0+Math.cos(a*4.3+s)*1.2;
-    var x=cx+Math.cos(a)*rx*w+ox,y=cy+Math.sin(a)*ry*w+oy;
-    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
-  }
-  ctx.closePath();ctx.stroke();ctx.globalAlpha=0.07;ctx.fillStyle=color;ctx.fill();ctx.restore();
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.lineTo(x+w-r,y);
+  ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r);
+  ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h);
+  ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r);
+  ctx.quadraticCurveTo(x,y,x+r,y);
+  ctx.closePath();
 }
 
 async function deployToGitHub(){
