@@ -431,11 +431,11 @@ async function runAnalysis(){
   var t1=setTimeout(function(){setLoad('Researching tasting notes…','Cross-referencing wines',38);},2200);
   var t2=setTimeout(function(){setLoad('Matching to your palate…','Almost ready…',65);},5000);
   var t3=setTimeout(function(){setLoad('Drawing your circles…','Finishing up',85);},7500);
-  var sys='You are an expert sommelier AI. Analyse a wine list and match wines to a user palate profile. CRITICAL: respond with ONLY a valid JSON array — no markdown, no code fences, no text outside the array. Start your response with [ and end with ]. Each array item must have: "name" (string), "details" (string), "match" (exactly "great","good", or "skip"), "reason" (string, 1-2 sentences), "notes" (string, brief tasting profile), "position" (number 0-100, vertical position on image 0=top 100=bottom).';
+  var sys='You are an expert sommelier AI. Analyse a wine list and match wines to a user palate profile. CRITICAL: respond with ONLY a valid JSON array — no markdown, no code fences, no text outside the array. Start your response with [ and end with ]. Each array item must have: "name" (string), "details" (string), "match" (exactly "great","good", or "skip"), "reason" (string, 1-2 sentences), "notes" (string, brief tasting profile), "position" (number 0-100, the vertical position of the WINE NAME LINE ONLY — not the tasting notes block — as a percentage from top of image, 0=very top 100=very bottom).';
   var profile=profileText();
   var messages;
   if(S.imgB64){
-    messages=[{role:'user',content:[{type:'image',source:{type:'base64',media_type:S.imgMime,data:S.imgB64}},{type:'text',text:'Extract every wine from this wine list image. Analyse each against: '+profile+'\n\nFor "position" estimate vertical position on image (0=top,100=bottom).\n\nReturn ONLY the JSON array.'}]}];
+    messages=[{role:'user',content:[{type:'image',source:{type:'base64',media_type:S.imgMime,data:S.imgB64}},{type:'text',text:'Extract every wine from this wine list image. Analyse each against: '+profile+'\n\nIMPORTANT: For "position", estimate the vertical position of the WINE NAME / TITLE LINE only (not the tasting notes paragraph below it). 0=top of image, 100=bottom. Be precise — each wine name line is a single line of bold text.\n\nReturn ONLY the JSON array.'}]}];
   }else{
     messages=[{role:'user',content:'Wine list:\n'+manual+'\n\nProfile: '+profile+'\n\nFor "position" assign evenly spaced values 5-95 by list order.\n\nReturn ONLY the JSON array.'}];
   }
@@ -484,32 +484,33 @@ function drawCircles(wines){
   var W=img.naturalWidth,H=img.naturalHeight;canvas.width=W;canvas.height=H;
   var ctx=canvas.getContext('2d');ctx.clearRect(0,0,W,H);
   var STYLES={
-    great:{fill:'rgba(45,106,79,0.22)',stroke:'rgba(45,106,79,0.7)',icon:'✓',iconColor:'rgba(45,106,79,1)'},
-    good: {fill:'rgba(199,123,46,0.18)',stroke:'rgba(199,123,46,0.6)',icon:'?',iconColor:'rgba(199,123,46,1)'},
-    skip: {fill:'rgba(155,34,38,0.13)', stroke:'rgba(155,34,38,0.45)', icon:'✕',iconColor:'rgba(155,34,38,0.9)'}
+    great:{fill:'rgba(45,106,79,0.18)',stroke:'rgba(45,106,79,0.7)',icon:'✓',iconColor:'rgba(45,106,79,1)'},
+    good: {fill:'rgba(199,123,46,0.15)',stroke:'rgba(199,123,46,0.6)',icon:'?',iconColor:'rgba(199,123,46,1)'},
+    skip: {fill:'rgba(155,34,38,0.12)',stroke:'rgba(155,34,38,0.5)', icon:'✕',iconColor:'rgba(155,34,38,0.9)'}
   };
+  // Single line height — just enough to cover one line of wine name text
+  var lineH=Math.max(H*0.022,18);
   wines.forEach(function(w,idx){
     var style=STYLES[w.match]||STYLES.skip;
     var pct=typeof w.position==='number'?Math.max(1,Math.min(99,w.position)):(idx+0.5)/wines.length*100;
     var cy=H*(pct/100);
-    // highlight bar — full width, tight height around the text line
-    var barH=Math.max(H*0.045,28);
-    var barY=cy-barH*0.55;
+    var barH=lineH;
+    var barY=cy-barH*0.5;
     var barX=W*0.02;
-    var barW=W*0.82; // leave room for icon on right
-    // fill
+    var barW=W*0.82;
     ctx.save();
+    // highlight fill — name line only
     ctx.globalAlpha=1;
     ctx.fillStyle=style.fill;
-    roundRect(ctx,barX,barY,barW,barH,barH*0.25);
+    roundRect(ctx,barX,barY,barW,barH,barH*0.3);
     ctx.fill();
-    // subtle left accent line
+    // left accent
     ctx.fillStyle=style.stroke;
-    roundRect(ctx,barX,barY,Math.max(4,W*0.006),barH,Math.max(2,W*0.003));
+    roundRect(ctx,barX,barY,Math.max(3,W*0.004),barH,Math.max(2,W*0.002));
     ctx.fill();
-    // icon circle on right
-    var iconR=barH*0.42;
-    var iconX=barX+barW+iconR+W*0.015;
+    // icon circle
+    var iconR=Math.max(lineH*0.55,12);
+    var iconX=barX+barW+iconR+W*0.01;
     var iconY=cy;
     ctx.beginPath();
     ctx.arc(iconX,iconY,iconR,0,Math.PI*2);
@@ -518,16 +519,16 @@ function drawCircles(wines){
     ctx.fill();
     ctx.globalAlpha=1;
     ctx.strokeStyle=style.stroke;
-    ctx.lineWidth=Math.max(1.5,W*0.002);
+    ctx.lineWidth=Math.max(1.5,W*0.0018);
     ctx.stroke();
-    // icon text
-    var fontSize=Math.max(14,barH*0.52);
-    ctx.font='600 '+fontSize+'px system-ui,sans-serif';
+    // icon character
+    var fontSize=Math.max(12,iconR*0.95);
+    ctx.font='700 '+fontSize+'px system-ui,sans-serif';
     ctx.fillStyle=style.iconColor;
     ctx.textAlign='center';
     ctx.textBaseline='middle';
     ctx.globalAlpha=1;
-    ctx.fillText(style.icon,iconX,iconY+fontSize*0.04);
+    ctx.fillText(style.icon,iconX,iconY+fontSize*0.05);
     ctx.restore();
   });
 }
