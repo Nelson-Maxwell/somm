@@ -570,25 +570,34 @@
 <div id="app">
 
   <!-- ═══════════════════════════════════════════════
-       SCREEN: API KEY SETUP
+       SCREEN: SETTINGS
   ═══════════════════════════════════════════════ -->
   <div id="s-apikey" class="screen">
+    <div class="top-bar" id="settings-topbar" style="display:none">
+      <div class="logo">Somm<span>.</span></div>
+      <button class="top-action" onclick="go('s-welcome')">← Back</button>
+    </div>
     <div class="key-wrap">
-      <div class="key-logo">Somm<span style="color:var(--gold)">.</span></div>
-      <div class="key-tagline">Your personal AI sommelier</div>
+      <div class="key-logo" id="settings-logo">Somm<span style="color:var(--gold)">.</span></div>
+      <div class="key-tagline" id="settings-tagline">Your personal AI sommelier</div>
+
+      <span class="label">Anthropic API key</span>
       <div class="key-card">
-        <p>Somm uses the Anthropic Claude AI to read wine lists and match them to your palate. You'll need a free API key to get started — it's stored only on this device.</p>
-        <ol>
-          <li>Go to <strong>console.anthropic.com</strong></li>
-          <li>Sign up / log in</li>
-          <li>Create an API key</li>
-          <li>Paste it below</li>
-        </ol>
+        <p>Somm uses Claude AI to read wine lists. Get a free key at <strong>console.anthropic.com</strong> → API Keys.</p>
       </div>
       <input type="password" id="api-key-input" class="key-input" placeholder="sk-ant-api03-..." autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">
+
+      <span class="label" style="margin-top:24px;display:block">GitHub auto-deploy <span style="font-weight:300;text-transform:none;letter-spacing:0;font-size:11px">(optional)</span></span>
+      <div class="key-card">
+        <p>Enter a GitHub Personal Access Token to let updates push directly to your live site. Create one at <strong>github.com/settings/tokens</strong> — tick the <strong>repo</strong> scope only. Always enter tokens directly into this field — never paste them into chat.</p>
+      </div>
+      <input type="password" id="gh-token-input" class="key-input" placeholder="ghp_..." autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">
+      <input type="text" id="gh-repo-input" class="key-input" placeholder="GitHub repo e.g. Nelson-Maxwell/somm" autocomplete="off" spellcheck="false" style="margin-top:8px">
+
       <div id="key-err" style="display:none" class="err-box"></div>
-      <button class="btn btn-gold" onclick="saveApiKey()">Save &amp; continue →</button>
-      <p style="font-size:11px;color:var(--muted);text-align:center;margin-top:16px;line-height:1.6">Your key is stored in your browser's localStorage and never sent anywhere except directly to Anthropic's API.</p>
+      <div id="key-ok"  style="display:none" class="info-box"></div>
+      <button class="btn btn-gold" onclick="saveSettings()">Save settings →</button>
+      <p style="font-size:11px;color:var(--muted);text-align:center;margin-top:16px;line-height:1.6">All keys are stored only in your browser's localStorage and sent only to their respective services.</p>
     </div>
   </div>
 
@@ -598,7 +607,7 @@
   <div id="s-welcome" class="screen">
     <div class="top-bar">
       <div class="logo">Somm<span>.</span></div>
-      <button class="top-action" onclick="go('s-apikey')">API key</button>
+      <button class="top-action" onclick="openSettings()">⚙ Settings</button>
     </div>
     <div class="screen-inner" style="display:flex;flex-direction:column;justify-content:center">
       <div class="hero-wrap" style="padding-top:20px">
@@ -691,7 +700,10 @@
   <div id="s-scan" class="screen">
     <div class="top-bar">
       <div class="logo">Somm<span>.</span></div>
-      <button class="top-action" onclick="go('s-step1')">Edit profile</button>
+      <div style="display:flex;gap:12px;align-items:center">
+        <button class="top-action" onclick="deployToGitHub()" title="Push to GitHub Pages" style="color:var(--gold)">↑ Deploy</button>
+        <button class="top-action" onclick="openSettings()">⚙</button>
+      </div>
     </div>
     <div class="screen-inner">
       <h2>Scan a wine list</h2>
@@ -790,13 +802,15 @@ const AVOID_OPTIONS = [
 // ═══════════════════════════════════════════════
 const S = {
   types:     [],
-  palate:    {},          // { Red: ['Earthy','Smoky'], ... }
+  palate:    {},
   avoid:     [],
   activeTab: 'Red',
   imageDataUrl:  null,
   imageB64:      null,
   imageMime:     null,
   apiKey:        null,
+  ghToken:       null,
+  ghRepo:        null,
 };
 
 // ═══════════════════════════════════════════════
@@ -805,16 +819,35 @@ const S = {
 window.addEventListener('DOMContentLoaded', () => {
   loadFromStorage();
   renderAllSteps();
-  if (!S.apiKey) {
+  const firstLaunch = !S.apiKey;
+  const topbar  = document.getElementById('settings-topbar');
+  const logo    = document.getElementById('settings-logo');
+  const tagline = document.getElementById('settings-tagline');
+  if (firstLaunch) {
+    if (topbar)  topbar.style.display  = 'none';
+    if (logo)    logo.style.display    = 'block';
+    if (tagline) tagline.style.display = 'block';
     go('s-apikey');
   } else {
+    if (topbar)  topbar.style.display  = 'flex';
+    if (logo)    logo.style.display    = 'none';
+    if (tagline) tagline.style.display = 'none';
     go('s-welcome');
   }
+  // Pre-fill settings fields with saved values
+  const akEl = document.getElementById('api-key-input');
+  const gtEl = document.getElementById('gh-token-input');
+  const grEl = document.getElementById('gh-repo-input');
+  if (akEl && S.apiKey)  akEl.value  = S.apiKey;
+  if (gtEl && S.ghToken) gtEl.value  = S.ghToken;
+  if (grEl && S.ghRepo)  grEl.value  = S.ghRepo;
   // drag-and-drop
   const dz = document.getElementById('drop-zone');
-  dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('dragover'); });
-  dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
-  dz.addEventListener('drop',      e => { e.preventDefault(); dz.classList.remove('dragover'); const f=e.dataTransfer.files[0]; if(f && f.type.startsWith('image/')) processImageFile(f); });
+  if (dz) {
+    dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('dragover'); });
+    dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+    dz.addEventListener('drop',      e => { e.preventDefault(); dz.classList.remove('dragover'); const f=e.dataTransfer.files[0]; if(f && f.type.startsWith('image/')) processImageFile(f); });
+  }
 });
 
 // ═══════════════════════════════════════════════
@@ -829,30 +862,105 @@ function loadFromStorage() {
   try {
     const raw = localStorage.getItem('somm_profile');
     if (raw) { const d = JSON.parse(raw); S.types = d.types||[]; S.palate = d.palate||{}; S.avoid = d.avoid||[]; }
-    S.apiKey = localStorage.getItem('somm_apikey') || null;
+    S.apiKey  = localStorage.getItem('somm_apikey')  || null;
+    S.ghToken = localStorage.getItem('somm_ghtoken') || null;
+    S.ghRepo  = localStorage.getItem('somm_ghrepo')  || null;
   } catch(e) {}
 }
 
 // ═══════════════════════════════════════════════
-// API KEY
+// SETTINGS SAVE
 // ═══════════════════════════════════════════════
-function saveApiKey() {
-  const val = document.getElementById('api-key-input').value.trim();
-  const errEl = document.getElementById('key-err');
-  if (!val.startsWith('sk-ant-')) {
-    errEl.textContent = 'That doesn\'t look like a valid Anthropic API key. It should start with "sk-ant-".';
+function saveSettings() {
+  const apiVal = document.getElementById('api-key-input').value.trim();
+  const ghTok  = document.getElementById('gh-token-input').value.trim();
+  const ghRepo = document.getElementById('gh-repo-input').value.trim();
+  const errEl  = document.getElementById('key-err');
+  const okEl   = document.getElementById('key-ok');
+  errEl.style.display = 'none';
+  okEl.style.display  = 'none';
+
+  if (!apiVal.startsWith('sk-ant-')) {
+    errEl.textContent = 'That doesn't look like a valid Anthropic API key. It should start with "sk-ant-".';
     errEl.style.display = 'block';
     return;
   }
-  errEl.style.display = 'none';
-  S.apiKey = val;
-  try { localStorage.setItem('somm_apikey', val); } catch(e) {}
+  S.apiKey = apiVal;
+  try { localStorage.setItem('somm_apikey', apiVal); } catch(e) {}
+
+  if (ghTok.startsWith('ghp_') && ghRepo.includes('/')) {
+    S.ghToken = ghTok;
+    S.ghRepo  = ghRepo;
+    try { localStorage.setItem('somm_ghtoken', ghTok); localStorage.setItem('somm_ghrepo', ghRepo); } catch(e) {}
+  }
+
+  const topbar  = document.getElementById('settings-topbar');
+  const logo    = document.getElementById('settings-logo');
+  const tagline = document.getElementById('settings-tagline');
+  if (topbar)  topbar.style.display  = 'flex';
+  if (logo)    logo.style.display    = 'none';
+  if (tagline) tagline.style.display = 'none';
   go('s-welcome');
 }
 
 // ═══════════════════════════════════════════════
+// GITHUB DEPLOY
+// ═══════════════════════════════════════════════
+async function deployToGitHub() {
+  if (!S.ghToken || !S.ghRepo) {
+    alert('No GitHub token configured. Go to Settings and add your token and repo.');
+    return;
+  }
+  const html = document.documentElement.outerHTML;
+  const repo  = S.ghRepo.trim().replace(/\/+$/, '');
+  const path  = 'somm.html';
+  const apiUrl = `https://api.github.com/repos/${repo}/contents/${path}`;
+  const headers = {
+    'Authorization': `token ${S.ghToken}`,
+    'Accept': 'application/vnd.github.v3+json',
+    'Content-Type': 'application/json'
+  };
+
+  try {
+    // Get current SHA
+    let sha = null;
+    const getR = await fetch(apiUrl, { headers });
+    if (getR.ok) { const d = await getR.json(); sha = d.sha; }
+
+    // Encode and push
+    const encoded = btoa(unescape(encodeURIComponent(html)));
+    const putR = await fetch(apiUrl, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ message: 'Somm update via app', content: encoded, ...(sha ? { sha } : {}) })
+    });
+    if (!putR.ok) {
+      const d = await putR.json().catch(() => ({}));
+      throw new Error(d.message || `GitHub error ${putR.status}`);
+    }
+    const user     = repo.split('/')[0];
+    const repoName = repo.split('/')[1] || 'somm';
+    const liveUrl  = `https://${user}.github.io/${repoName}/somm.html`;
+    alert(`Deployed! Live at:\n${liveUrl}\n\n(GitHub Pages may take ~60 seconds to update)`);
+  } catch(err) {
+    alert(`Deploy failed: ${err.message}`);
+  }
+}
+
+
+// ═══════════════════════════════════════════════
 // NAVIGATION
 // ═══════════════════════════════════════════════
+function openSettings() {
+  const topbar  = document.getElementById('settings-topbar');
+  const logo    = document.getElementById('settings-logo');
+  const tagline = document.getElementById('settings-tagline');
+  if (topbar)  topbar.style.display  = 'flex';
+  if (logo)    logo.style.display    = 'none';
+  if (tagline) tagline.style.display = 'none';
+  go('s-apikey');
+}
+
 function go(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   const el = document.getElementById(id);
@@ -1091,9 +1199,10 @@ Each item in the array must have exactly these keys:
         'Content-Type':  'application/json',
         'x-api-key':     S.apiKey,
         'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
       },
       body: JSON.stringify({
-        model:      'claude-opus-4-5',
+        model:      'claude-sonnet-4-5',
         max_tokens: 2000,
         system:     systemPrompt,
         messages,
